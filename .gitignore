@@ -207,3 +207,8 @@ marimo/_lsp/
 __marimo__/
 
 # Installed libraries
+
+
+# Datasets
+AOT - RAW
+data
