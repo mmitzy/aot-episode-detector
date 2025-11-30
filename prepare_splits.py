@@ -1,4 +1,5 @@
 from pathlib import Path
+import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
     col, max as spark_max, rand, when, lit
@@ -107,36 +108,18 @@ def main():
     test_df  = test_df.select(*cols_to_keep)
 
     # Write out CSVs
-    (train_df
-        .coalesce(1)
-        .write
-        .mode("overwrite")
-        .option("header", True)
-        .csv(TRAIN_CSV + "_tmp"))
+    train_pdf = train_df.toPandas()
+    val_pdf   = val_df.toPandas()
+    test_pdf  = test_df.toPandas()
 
-    (val_df
-        .coalesce(1)
-        .write
-        .mode("overwrite")
-        .option("header", True)
-        .csv(VAL_CSV + "_tmp"))
-
-    (test_df
-        .coalesce(1)
-        .write
-        .mode("overwrite")
-        .option("header", True)
-        .csv(TEST_CSV + "_tmp"))
-
-    flatten_spark_csv(TRAIN_CSV + "_tmp", TRAIN_CSV)
-    flatten_spark_csv(VAL_CSV   + "_tmp", VAL_CSV)
-    flatten_spark_csv(TEST_CSV  + "_tmp", TEST_CSV)
+    train_pdf.to_csv(TRAIN_CSV, index=False)
+    val_pdf.to_csv(VAL_CSV, index=False)
+    test_pdf.to_csv(TEST_CSV, index=False)
 
     print("\nWrote:")
     print("  train_core.csv ->", TRAIN_CSV)
     print("  val_core.csv   ->", VAL_CSV)
     print("  test_core.csv  ->", TEST_CSV)
-
     spark.stop()
 
 
