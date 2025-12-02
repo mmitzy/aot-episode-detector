@@ -206,9 +206,9 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Installed libraries
-
-
 # Datasets
 AOT - RAW
 data
+
+# Tests
+train_one_batch.py
