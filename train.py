@@ -5,18 +5,22 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from tqdm.auto import tqdm  # progress bars
 
 from dataset import create_dataloaders
 from model import AOTEpisodeNet
 
 
-def train_one_epoch(model, loader, criterion, optimizer, device):
+def train_one_epoch(model, loader, criterion, optimizer, device, epoch, num_epochs):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
 
-    for batch_idx, (images, labels, metas) in enumerate(loader):
+    # tqdm progress bar over batches
+    loop = tqdm(loader, desc=f"Epoch {epoch}/{num_epochs} [Train]", ncols=100)
+
+    for images, labels, metas in loop:
         images = images.to(device)
         labels = labels.to(device)
 
@@ -28,45 +32,51 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
         loss.backward()
         optimizer.step()
 
-        running_loss += loss.item() * images.size(0)
+        batch_size = images.size(0)
+        running_loss += loss.item() * batch_size
 
-        # predictions & accuracy
         preds = logits.argmax(dim=1)
         correct += (preds == labels).sum().item()
-        total += labels.size(0)
+        total += batch_size
 
-        # optional: print every N batches
-        if (batch_idx + 1) % 500 == 0:
-            avg_loss = running_loss / total
-            acc = correct / total * 100
-            print(f"[Train] Batch {batch_idx+1}/{len(loader)} "
-                  f"Loss: {avg_loss:.4f} Acc: {acc:.2f}%")
+        # update bar postfix (live)
+        loop.set_postfix({
+            "loss": f"{running_loss / total:.4f}",
+            "acc": f"{(correct / total) * 100:.2f}%"
+        })
 
     epoch_loss = running_loss / total
     epoch_acc = correct / total * 100.0
     return epoch_loss, epoch_acc
 
 
-def evaluate(model, loader, criterion, device):
+def evaluate(model, loader, criterion, device, epoch, num_epochs, split_name="Val"):
     model.eval()
     running_loss = 0.0
     correct = 0
     total = 0
 
-    # we don't want gradients during evaluation
+    loop = tqdm(loader, desc=f"Epoch {epoch}/{num_epochs} [{split_name}]", ncols=100)
+
     with torch.no_grad():
-        for images, labels, metas in loader:
+        for images, labels, metas in loop:
             images = images.to(device)
             labels = labels.to(device)
 
             logits, embeddings = model(images)
             loss = criterion(logits, labels)
 
-            running_loss += loss.item() * images.size(0)
+            batch_size = images.size(0)
+            running_loss += loss.item() * batch_size
 
             preds = logits.argmax(dim=1)
             correct += (preds == labels).sum().item()
-            total += labels.size(0)
+            total += batch_size
+
+            loop.set_postfix({
+                "loss": f"{running_loss / total:.4f}",
+                "acc": f"{(correct / total) * 100:.2f}%"
+            })
 
     epoch_loss = running_loss / total
     epoch_acc = correct / total * 100.0
@@ -85,8 +95,8 @@ def main():
     frames_root = project_root
 
     # ===== Hyperparameters =====
-    num_epochs = 5        # you can increase later
-    batch_size = 32       # 16 was fine, 32 maybe still OK on CPU
+    num_epochs = 5       # you can tweak this
+    batch_size = 32      # start with 32; drop to 16 if it's too slow
     lr = 1e-3
     weight_decay = 1e-4
 
@@ -121,7 +131,6 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
-    # step_size=2 → after 2 epochs, lr *= 0.1
 
     # ===== Training loop =====
     best_val_acc = 0.0
@@ -132,17 +141,19 @@ def main():
         print(f"\n=== Epoch {epoch}/{num_epochs} ===")
 
         start_time = time.time()
-        train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, device
-        )
-        val_loss, val_acc = evaluate(
-            model, val_loader, criterion, device
-        )
-        scheduler.step()
 
+        train_loss, train_acc = train_one_epoch(
+            model, train_loader, criterion, optimizer, device, epoch, num_epochs
+        )
+
+        val_loss, val_acc = evaluate(
+            model, val_loader, criterion, device, epoch, num_epochs, split_name="Val"
+        )
+
+        scheduler.step()
         epoch_time = time.time() - start_time
 
-        print(f"Epoch {epoch} done in {epoch_time:.1f}s")
+        print(f"\nEpoch {epoch} done in {epoch_time:.1f}s")
         print(f"  Train Loss: {train_loss:.4f}  |  Train Acc: {train_acc:.2f}%")
         print(f"  Val   Loss: {val_loss:.4f}  |  Val   Acc: {val_acc:.2f}%")
 
@@ -165,9 +176,11 @@ def main():
     print("\nTraining finished.")
     print(f"Best val accuracy: {best_val_acc:.2f}%")
 
-    # Optional: evaluate on test set if you want
+    # ===== Optional: final test evaluation =====
     if test_loader is not None:
-        test_loss, test_acc = evaluate(model, test_loader, criterion, device)
+        test_loss, test_acc = evaluate(
+            model, test_loader, criterion, device, epoch=num_epochs, num_epochs=num_epochs, split_name="Test"
+        )
         print(f"\nTest Loss: {test_loss:.4f}  |  Test Acc: {test_acc:.2f}%")
 
 

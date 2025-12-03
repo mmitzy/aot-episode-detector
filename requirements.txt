@@ -3,3 +3,4 @@ pyspark
 torch
 torchvision
 torchaudio
+tqdm
