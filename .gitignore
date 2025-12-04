@@ -212,3 +212,6 @@ data
 
 # Tests
 train_one_batch.py
+
+# Saved models
+checkpoints

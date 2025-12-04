@@ -95,7 +95,7 @@ def main():
     frames_root = project_root
 
     # ===== Hyperparameters =====
-    num_epochs = 5       # you can tweak this
+    num_epochs = 1       # you can tweak this
     batch_size = 32      # start with 32; drop to 16 if it's too slow
     lr = 1e-3
     weight_decay = 1e-4
